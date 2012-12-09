@@ -1,0 +1,5 @@
+TIME          LandS
+PERIODS       LP
+    X1        S1C1                     ROOT
+    Y11       S2C1                     STAGE-2
+ENDATA
