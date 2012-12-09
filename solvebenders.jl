@@ -41,7 +41,7 @@ function solveBenders(d::SMPSData, nscen::Integer)
         #for i in 1:ncol1
         #    print("$(stage1sol[i]),")
         #end
-        println("]")
+        #println("]")
         for s in 1:nscen
             clp_chg_row_lower(clpsubproblem, scenarioData[s][1]-Tx)
             clp_chg_row_upper(clpsubproblem, scenarioData[s][2]-Tx)
