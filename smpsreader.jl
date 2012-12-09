@@ -82,9 +82,9 @@ function SMPSData(cor::String,tim::String,sto::String)
     secondStageTemplate = BlockData(ncol2,nrow2,collb[ncol1+1:end],colub[ncol1+1:end],obj[ncol1+1:end],rowlb[nrow1+1:end],rowub[nrow1+1:end],colname[ncol1+1:end],rowname[nrow+1:end])
 
     Amat = A[1:nrow1,1:ncol1]
-    Tmat = A[nrow1+1:end,1:ncol]
+    Tmat = A[nrow1+1:end,1:ncol1]
     Wmat = A[nrow1+1:end,ncol1+1:end]
-
+    
     fs = open(sto,"r")
     line = readline(fs)
     @assert search(line,"STOCH")[1] == 1
@@ -103,7 +103,7 @@ function SMPSData(cor::String,tim::String,sto::String)
     while search(line,"ENDATA") == (0,0)
         sp = split(line)
         col,row = sp[1],sp[2]
-        val,p = float(sp[3]),float(sp[4])
+        val,p = float(sp[3]),float(sp[end])
         @assert search(col,"RHS")[1] == 1
         rowidx = find(rowname[rowstart2:end] .== row)[1]
         @assert 0 <= rowidx <= nrow2
@@ -136,12 +136,19 @@ function SMPSData(cor::String,tim::String,sto::String)
 
 end
 
-function monteCarloSample(d::SMPSData,scenariosWanted::Vector{Int})
+function monteCarloSample(d::SMPSData,scenariosWanted)
     
     srand(10) # for reproducibility
 
-    out = (Vector{Float64},Vector{Float64})[]
-    for s in scenariosWanted
+    out = Array((Vector{Float64},Vector{Float64}),0)
+    maxscen = max(scenariosWanted)
+    for s in 1:maxscen
+        if !contains(scenariosWanted,s)
+            # advance rng
+            x = rand(length(d.randomIdx))
+            continue
+        end
+        
         rowlb = copy(d.secondStageTemplate.rowlb)
         rowub = copy(d.secondStageTemplate.rowub)
         for i in 1:length(d.randomIdx)
@@ -175,8 +182,4 @@ function monteCarloSample(d::SMPSData,scenariosWanted::Vector{Int})
 
     return out
 end
-
-                
-s = ARGS[1]
-d = SMPSData(strcat(s,".cor"),strcat(s,".tim"),strcat(s,".sto"))
 

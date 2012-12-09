@@ -50,8 +50,6 @@ function solveExtensive(d::SMPSData, nscen::Integer)
         end
     end
     
-    @assert nnzcount == nnz(Amat) + nscen*nnz(Tmat)
-
     for z in 1:nscen
         for i in 1:ncol2
             thiscol = i+ncol1+(z-1)*ncol2
@@ -86,10 +84,13 @@ function solveExtensive(d::SMPSData, nscen::Integer)
     clp_load_problem(c,Aextensive,collb,colub,obj,rowlb,rowub)
 
     clp_initial_solve(c)
-
+    
+    return clp_get_col_solution(c)[1:ncol1]
 end
 
-s = ARGS[1]
-nscen = int(ARGS[2])
-d = SMPSData(strcat(s,".cor"),strcat(s,".tim"),strcat(s,".sto"))
-solveExtensive(d,nscen)
+if false
+    s = ARGS[1]
+    nscen = int(ARGS[2])
+    d = SMPSData(strcat(s,".cor"),strcat(s,".tim"),strcat(s,".sto"))
+    solveExtensive(d,nscen)
+end
