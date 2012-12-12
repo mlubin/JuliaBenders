@@ -1,6 +1,5 @@
-#load("smpsreader")
-load("/home/mlubin/hdd/jlBenders/smpsreader.jl")
-load("/home/mlubin/hdd/jlBenders/solveextensive.jl")
+load("smpsreader")
+load("extensive")
 
 
 function solveBenders(d::SMPSData, nscen::Integer)
@@ -101,10 +100,3 @@ function solveBenders(d::SMPSData, nscen::Integer)
 
 end
 
-# how do you do equivalent of __name__ == "__main__"?
-if true
-    s = ARGS[1]
-    nscen = int(ARGS[2])
-    d = SMPSData(strcat(s,".cor"),strcat(s,".tim"),strcat(s,".sto"))
-    solveBenders(d,nscen)
-end

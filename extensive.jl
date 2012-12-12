@@ -1,5 +1,4 @@
-#load("smpsreader")
-load("/home/mlubin/hdd/jlBenders/smpsreader.jl")
+load("smpsreader")
 
 function solveExtensive(d::SMPSData, nscen::Integer)
 
@@ -88,9 +87,3 @@ function solveExtensive(d::SMPSData, nscen::Integer)
     return clp_get_col_solution(c)[1:ncol1]
 end
 
-if false
-    s = ARGS[1]
-    nscen = int(ARGS[2])
-    d = SMPSData(strcat(s,".cor"),strcat(s,".tim"),strcat(s,".sto"))
-    solveExtensive(d,nscen)
-end
