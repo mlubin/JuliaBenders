@@ -1,4 +1,4 @@
-load("smpsreader")
+require("smpsreader")
 
 function solveExtensive(d::SMPSData, nscen::Integer)
 

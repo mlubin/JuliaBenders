@@ -1,4 +1,4 @@
-load("clp")
+require("clp")
 
 
 

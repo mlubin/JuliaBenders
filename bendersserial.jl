@@ -1,18 +1,50 @@
-load("smpsreader")
-load("extensive")
+require("extensive")
+
+const clpsubproblem = ClpModel()
+clp_set_log_level(clpsubproblem,0)
+
+function setGlobalProbData(d::SMPSData)
+    global probdata = d
+end
+
+function solveSubproblem(rowlb, rowub)
+
+    Tmat = probdata.Tmat
+    ncol1 = probdata.firstStageData.ncol
+    nrow2 = probdata.secondStageTemplate.nrow
+
+    clp_chg_row_lower(clpsubproblem,rowlb)
+    clp_chg_row_upper(clpsubproblem,rowub)
+    clp_initial_solve(clpsubproblem)
+    # don't handle infeasible subproblems yet
+    @assert clp_is_proven_optimal(clpsubproblem)
+    optval = clp_get_obj_value(clpsubproblem)
+    duals = clp_dual_row_solution(clpsubproblem)
+    
+    subgrad = zeros(ncol1)
+    for i in 1:nrow2
+        status = clp_get_row_status(clpsubproblem,i)
+        if (status == 1) # basic
+            continue
+        end
+        for k in 1:ncol1
+            subgrad[k] += -duals[i]*Tmat[i,k]
+        end
+    end
+
+    return optval, subgrad
+end
 
 
-function solveBenders(d::SMPSData, nscen::Integer)
+
+function solveBendersSerial(d::SMPSData, nscen::Integer)
 
     scenarioData = monteCarloSample(d,1:nscen)
 
     stage1sol = solveExtensive(d,1)
     
     clpmaster = ClpModel()
-
-    clpsubproblem = ClpModel()
-    clp_set_log_level(clpsubproblem,0)
-
+    setGlobalProbData(d)
     ncol1 = d.firstStageData.ncol
     nrow1 = d.firstStageData.nrow
     nrow2 = d.secondStageTemplate.nrow
@@ -32,6 +64,8 @@ function solveBenders(d::SMPSData, nscen::Integer)
     thetasol = -1e8*ones(nscen)
 
     converged = false
+    niter = 0
+    mastertime = 0.
     while true
         Tx = d.Tmat*stage1sol
         # solve benders subproblems
@@ -42,23 +76,7 @@ function solveBenders(d::SMPSData, nscen::Integer)
         #end
         #println("]")
         for s in 1:nscen
-            clp_chg_row_lower(clpsubproblem, scenarioData[s][1]-Tx)
-            clp_chg_row_upper(clpsubproblem, scenarioData[s][2]-Tx)
-            clp_initial_solve(clpsubproblem)
-            # don't handle infeasible subproblems yet
-            @assert clp_is_proven_optimal(clpsubproblem)
-            optval = clp_get_obj_value(clpsubproblem)
-            duals = clp_dual_row_solution(clpsubproblem)
-            subgrad = zeros(ncol1)
-            for i in 1:nrow2
-                status = clp_get_row_status(clpsubproblem,i)
-                if (status == 1) # basic
-                    continue
-                end
-                for k in 1:ncol1
-                    subgrad[k] += -duals[i]*d.Tmat[i,k]
-                end
-            end
+            optval, subgrad = solveSubproblem(scenarioData[s][1]-Tx,scenarioData[s][2]-Tx)
             #println("For scen $s, optval is $optval and model value is $(thetasol[s])")
             if (optval > thetasol[s] + 1e-7)
                 nviolated += 1
@@ -89,14 +107,18 @@ function solveBenders(d::SMPSData, nscen::Integer)
         end
         println("Generated $nviolated violated cuts")
         # resolve master
+        t = time()
         clp_initial_solve(clpmaster)
+        mastertime += time() - t
         @assert clp_is_proven_optimal(clpmaster)
         sol = clp_get_col_solution(clpmaster)
         stage1sol = sol[1:ncol1]
         thetasol = sol[(ncol1+1):end]
+        niter += 1
     end
 
-    println("Optimal objective is: $(clp_get_obj_value(clpmaster))")
+    println("Optimal objective is: $(clp_get_obj_value(clpmaster)), $niter iterations")
+    println("Time in master: $mastertime sec")
 
 end
 
