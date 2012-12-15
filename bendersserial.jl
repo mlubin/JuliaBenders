@@ -7,6 +7,10 @@ function setGlobalProbData(d::SMPSData)
     global probdata = d
 end
 
+function solveSubproblems(rowlbs, rowubs)
+    return [solveSubproblem(rowlbs[i],rowubs[i]) for i in 1:length(rowlbs)]
+end
+
 function solveSubproblem(rowlb, rowub)
 
     Tmat = probdata.Tmat
@@ -35,6 +39,28 @@ function solveSubproblem(rowlb, rowub)
     return optval, subgrad
 end
 
+function addCut(master::ClpModel, optval::Float64, subgrad::Vector{Float64}, stage1sol::Vector{Float64}, scen)
+    #print("adding cut: [")
+    # add (0-based) cut to master
+    cutvec = Float64[]
+    cutcolidx = Int32[]
+    for k in 1:length(subgrad)
+     #   print("$(subgrad[k]),")
+        if abs(subgrad[k]) > 1e-10
+            push(cutvec,-subgrad[k])
+            push(cutcolidx,k-1)
+        end
+    end
+    #println("]")
+    push(cutvec,1.)
+    push(cutcolidx,length(subgrad)+scen-1)
+    cutnnz = length(cutvec)
+    cutlb = optval-dot(subgrad,stage1sol)
+
+    clp_add_rows(master, 1, [cutlb], [1e25], Int32[0,cutnnz], cutcolidx, cutvec)
+
+
+end
 
 
 function solveBendersSerial(d::SMPSData, nscen::Integer)
@@ -80,24 +106,7 @@ function solveBendersSerial(d::SMPSData, nscen::Integer)
             #println("For scen $s, optval is $optval and model value is $(thetasol[s])")
             if (optval > thetasol[s] + 1e-7)
                 nviolated += 1
-                #print("adding cut: [")
-                # add (0-based) cut to master
-                cutvec = Float64[]
-                cutcolidx = Int32[]
-                for k in 1:ncol1
-                 #   print("$(subgrad[k]),")
-                    if abs(subgrad[k]) > 1e-10
-                        push(cutvec,-subgrad[k])
-                        push(cutcolidx,k-1)
-                    end
-                end
-                #println("]")
-                push(cutvec,1.)
-                push(cutcolidx,ncol1+s-1)
-                cutnnz = length(cutvec)
-                cutlb = optval-dot(subgrad,stage1sol)
-
-                clp_add_rows(clpmaster, 1, [cutlb], [1e25], Int32[0,cutnnz], cutcolidx, cutvec)
+                addCut(clpmaster, optval, subgrad, stage1sol, s)
             end
 
         end

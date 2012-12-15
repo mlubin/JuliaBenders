@@ -32,6 +32,7 @@ function solveBendersParallel(nscen::Integer)
     converged = false
     niter = 0
     mastertime = 0.
+    const blocksize = 2
     while true
         Tx = d.Tmat*stage1sol
         # solve benders subproblems
@@ -42,37 +43,25 @@ function solveBendersParallel(nscen::Integer)
         #end
         #println("]")
         scen_count = 1
-        next_scen() = (idx=scen_count; scen_count+=1; idx)
+        next_block() = (idx=scen_count; scen_count+=blocksize; idx:min(idx+blocksize-1,nscen))
         new_violated() = (nviolated += 1)
         @sync for p in 1:np
             if p != myid() || np == 1
                 @spawnlocal while true
-                    s = next_scen()
-                    if s > nscen
+                    scenblock = next_block()
+                    if length(scenblock) == 0
                         break
                     end
-                    optval, subgrad = remote_call_fetch(p,solveSubproblem,scenarioData[s][1]-Tx,scenarioData[s][2]-Tx)
-                    #println("For scen $s, optval is $optval and model value is $(thetasol[s])")
-                    if (optval > thetasol[s] + 1e-7)
-                        new_violated()
-                        #print("adding cut: [")
-                        # add (0-based) cut to master
-                        cutvec = Float64[]
-                        cutcolidx = Int32[]
-                        for k in 1:ncol1
-                         #   print("$(subgrad[k]),")
-                            if abs(subgrad[k]) > 1e-10
-                                push(cutvec,-subgrad[k])
-                                push(cutcolidx,k-1)
-                            end
+                    results = remote_call_fetch(p,solveSubproblems,
+                        [scenarioData[s][1]-Tx for s in scenblock],
+                        [scenarioData[s][2]-Tx for s in scenblock])
+                    for (s,result) in zip(scenblock,results)
+                        optval, subgrad = result
+                        #println("For scen $s, optval is $optval and model value is $(thetasol[s])")
+                        if (optval > thetasol[s] + 1e-7)
+                            new_violated()
+                            addCut(clpmaster, optval, subgrad, stage1sol, s)
                         end
-                        #println("]")
-                        push(cutvec,1.)
-                        push(cutcolidx,ncol1+s-1)
-                        cutnnz = length(cutvec)
-                        cutlb = optval-dot(subgrad,stage1sol)
-
-                        clp_add_rows(clpmaster, 1, [cutlb], [1e25], Int32[0,cutnnz], cutcolidx, cutvec)
                     end
                 end
             end
