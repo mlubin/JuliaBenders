@@ -16,14 +16,14 @@ function solveBendersParallel(nscen::Integer)
     nrow2 = probdata.secondStageTemplate.nrow
     # add \theta variables for cuts
     thetaidx = [(ncol1+1):(ncol1+nscen)]
-    clp_load_problem(clpmaster, probdata.Amat, probdata.firstStageData.collb,
+    load_problem(clpmaster, probdata.Amat, probdata.firstStageData.collb,
         probdata.firstStageData.colub, probdata.firstStageData.obj, 
         probdata.firstStageData.rowlb, probdata.firstStageData.rowub)
     zeromat = SparseMatrixCSC(int32(nrow1),int32(nscen),ones(Int32,nscen+1),Int32[],Float64[])
-    clp_add_columns(clpmaster, -1e8*ones(nscen), Inf*ones(nscen),
+    add_columns(clpmaster, -1e8*ones(nscen), Inf*ones(nscen),
         (1/nscen)*ones(nscen), zeromat)
 
-    @everywhere clp_load_problem(clpsubproblem, probdata.Wmat, probdata.secondStageTemplate.collb,
+    @everywhere load_problem(clpsubproblem, probdata.Wmat, probdata.secondStageTemplate.collb,
         probdata.secondStageTemplate.colub, probdata.secondStageTemplate.obj,
         probdata.secondStageTemplate.rowlb, probdata.secondStageTemplate.rowub)
 
@@ -73,16 +73,16 @@ function solveBendersParallel(nscen::Integer)
         println("Generated $nviolated violated cuts")
         # resolve master
         t = time()
-        clp_initial_solve(clpmaster)
+        initial_solve(clpmaster)
         mastertime += time() - t
-        @assert clp_is_proven_optimal(clpmaster)
-        sol = clp_get_col_solution(clpmaster)
+        @assert is_proven_optimal(clpmaster)
+        sol = get_col_solution(clpmaster)
         stage1sol = sol[1:ncol1]
         thetasol = sol[(ncol1+1):end]
         niter += 1
     end
 
-    println("Optimal objective is: $(clp_get_obj_value(clpmaster)), $niter iterations")
+    println("Optimal objective is: $(get_obj_value(clpmaster)), $niter iterations")
     println("Time in master: $mastertime sec")
 
 end
