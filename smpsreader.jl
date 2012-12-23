@@ -1,5 +1,6 @@
 require("clp")
 
+using Clp
 
 
 # This is designed as a reader for the small subset of SMPS used by the problems available at
@@ -34,23 +35,23 @@ end
 function SMPSData(cor::String,tim::String,sto::String) 
     
     reader = ClpModel()
-    clp_read_mps(reader,cor,true,false)
-    collb = clp_get_col_lower(reader)
-    colub = clp_get_col_upper(reader)
-    obj = clp_get_obj_coefficients(reader)
-    rowlb = clp_get_row_lower(reader)
-    rowub = clp_get_row_upper(reader)
-    A = clp_get_constraint_matrix(reader)
+    read_mps(reader,cor,true,false)
+    collb = get_col_lower(reader)
+    colub = get_col_upper(reader)
+    obj = get_obj_coefficients(reader)
+    rowlb = get_row_lower(reader)
+    rowub = get_row_upper(reader)
+    A = get_constraint_matrix(reader)
     ncol = size(collb,1)
     nrow = size(rowlb,1)
 
     colname = String[]
     rowname = String[]
     for i in 1:ncol
-        push(colname,clp_column_name(reader,i))
+        push(colname,column_name(reader,i))
     end
     for i in 1:nrow
-        push(rowname,clp_row_name(reader,i))
+        push(rowname,row_name(reader,i))
     end
 
 

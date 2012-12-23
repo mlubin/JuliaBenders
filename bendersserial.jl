@@ -1,7 +1,7 @@
 require("extensive")
 
 const clpsubproblem = ClpModel()
-clp_set_log_level(clpsubproblem,0)
+set_log_level(clpsubproblem,0)
 
 function setGlobalProbData(d::SMPSData)
     global probdata = d
@@ -17,17 +17,17 @@ function solveSubproblem(rowlb, rowub)
     ncol1 = probdata.firstStageData.ncol
     nrow2 = probdata.secondStageTemplate.nrow
 
-    clp_chg_row_lower(clpsubproblem,rowlb)
-    clp_chg_row_upper(clpsubproblem,rowub)
-    clp_initial_solve(clpsubproblem)
+    chg_row_lower(clpsubproblem,rowlb)
+    chg_row_upper(clpsubproblem,rowub)
+    initial_solve(clpsubproblem)
     # don't handle infeasible subproblems yet
-    @assert clp_is_proven_optimal(clpsubproblem)
-    optval = clp_get_obj_value(clpsubproblem)
-    duals = clp_dual_row_solution(clpsubproblem)
+    @assert is_proven_optimal(clpsubproblem)
+    optval = get_obj_value(clpsubproblem)
+    duals = dual_row_solution(clpsubproblem)
     
     subgrad = zeros(ncol1)
     for i in 1:nrow2
-        status = clp_get_row_status(clpsubproblem,i)
+        status = get_row_status(clpsubproblem,i)
         if (status == 1) # basic
             continue
         end
@@ -57,7 +57,7 @@ function addCut(master::ClpModel, optval::Float64, subgrad::Vector{Float64}, sta
     cutnnz = length(cutvec)
     cutlb = optval-dot(subgrad,stage1sol)
 
-    clp_add_rows(master, 1, [cutlb], [1e25], Int32[0,cutnnz], cutcolidx, cutvec)
+    add_rows(master, 1, [cutlb], [1e25], Int32[0,cutnnz], cutcolidx, cutvec)
 
 
 end
@@ -76,14 +76,14 @@ function solveBendersSerial(d::SMPSData, nscen::Integer)
     nrow2 = d.secondStageTemplate.nrow
     # add \theta variables for cuts
     thetaidx = [(ncol1+1):(ncol1+nscen)]
-    clp_load_problem(clpmaster, d.Amat, d.firstStageData.collb,
+    load_problem(clpmaster, d.Amat, d.firstStageData.collb,
         d.firstStageData.colub, d.firstStageData.obj, d.firstStageData.rowlb,
         d.firstStageData.rowub)
     zeromat = SparseMatrixCSC(int32(nrow1),int32(nscen),ones(Int32,nscen+1),Int32[],Float64[])
-    clp_add_columns(clpmaster, -1e8*ones(nscen), Inf*ones(nscen),
+    add_columns(clpmaster, -1e8*ones(nscen), Inf*ones(nscen),
         (1/nscen)*ones(nscen), zeromat)
 
-    clp_load_problem(clpsubproblem, d.Wmat, d.secondStageTemplate.collb,
+    load_problem(clpsubproblem, d.Wmat, d.secondStageTemplate.collb,
         d.secondStageTemplate.colub, d.secondStageTemplate.obj,
         d.secondStageTemplate.rowlb, d.secondStageTemplate.rowub)
 
@@ -117,16 +117,16 @@ function solveBendersSerial(d::SMPSData, nscen::Integer)
         println("Generated $nviolated violated cuts")
         # resolve master
         t = time()
-        clp_initial_solve(clpmaster)
+        initial_solve(clpmaster)
         mastertime += time() - t
-        @assert clp_is_proven_optimal(clpmaster)
-        sol = clp_get_col_solution(clpmaster)
+        @assert is_proven_optimal(clpmaster)
+        sol = get_col_solution(clpmaster)
         stage1sol = sol[1:ncol1]
         thetasol = sol[(ncol1+1):end]
         niter += 1
     end
 
-    println("Optimal objective is: $(clp_get_obj_value(clpmaster)), $niter iterations")
+    println("Optimal objective is: $(get_obj_value(clpmaster)), $niter iterations")
     println("Time in master: $mastertime sec")
 
 end

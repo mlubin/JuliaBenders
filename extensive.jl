@@ -80,10 +80,10 @@ function solveExtensive(d::SMPSData, nscen::Integer)
 
     c = ClpModel()
 
-    clp_load_problem(c,Aextensive,collb,colub,obj,rowlb,rowub)
+    load_problem(c,Aextensive,collb,colub,obj,rowlb,rowub)
 
-    clp_initial_solve(c)
+    initial_solve(c)
     
-    return clp_get_col_solution(c)[1:ncol1]
+    return get_col_solution(c)[1:ncol1]
 end
 
