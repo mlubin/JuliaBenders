@@ -1,6 +1,6 @@
 load("bendersserial")
 
-
+# simple synchronous parallel benders
 
 function solveBendersParallel(nscen::Integer)
 
