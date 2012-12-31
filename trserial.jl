@@ -2,14 +2,16 @@ require("bendersserial")
 
 # l_infty trust region
 function setTR(c::ClpModel, center, nominallb, nominalub, radius)
-    newlb = copy(lb)
-    newub = copy(ub)
+    newlb = get_col_lower(c)
+    newub = get_col_upper(c)
+    newlb[1:length(center)] = nominallb
+    newub[1:length(center)] = nominalub
     for i in 1:length(center)
         newlb[i] = max(nominallb[i],-radius+center[i])
-        newub[i] = min(nomunalub[i],radius+center[i])
+        newub[i] = min(nominalub[i],radius+center[i])
     end
-    clp_chg_column_lower(c,newlb)
-    clp_chg_column_upper(c,newub)
+    chg_column_lower(c,newlb)
+    chg_column_upper(c,newub)
 end
 
 
@@ -20,21 +22,21 @@ function solveTRSerial(d::SMPSData, nscen::Integer)
     stage1sol = solveExtensive(d,1)
     
     clpmaster = ClpModel()
-    clp_set_log_level(clpmaster,0)
+    set_log_level(clpmaster,0)
     setGlobalProbData(d)
     ncol1 = d.firstStageData.ncol
     nrow1 = d.firstStageData.nrow
     nrow2 = d.secondStageTemplate.nrow
     # add \theta variables for cuts
     thetaidx = [(ncol1+1):(ncol1+nscen)]
-    clp_load_problem(clpmaster, d.Amat, d.firstStageData.collb,
+    load_problem(clpmaster, d.Amat, d.firstStageData.collb,
         d.firstStageData.colub, d.firstStageData.obj, d.firstStageData.rowlb,
         d.firstStageData.rowub)
     zeromat = SparseMatrixCSC(int32(nrow1),int32(nscen),ones(Int32,nscen+1),Int32[],Float64[])
-    clp_add_columns(clpmaster, -1e8*ones(nscen), Inf*ones(nscen),
+    add_columns(clpmaster, -1e8*ones(nscen), Inf*ones(nscen),
         (1/nscen)*ones(nscen), zeromat)
 
-    clp_load_problem(clpsubproblem, d.Wmat, d.secondStageTemplate.collb,
+    load_problem(clpsubproblem, d.Wmat, d.secondStageTemplate.collb,
         d.secondStageTemplate.colub, d.secondStageTemplate.obj,
         d.secondStageTemplate.rowlb, d.secondStageTemplate.rowub)
 
@@ -63,14 +65,15 @@ function solveTRSerial(d::SMPSData, nscen::Integer)
     while true
 
         # resolve master
+        setTR(clpmaster,stage1sol,d.firstStageData.collb,d.firstStageData.colub,tr_radius)
         t = time()
-        clp_initial_solve(clpmaster)
+        initial_solve(clpmaster)
         mastertime += time() - t
-        @assert clp_is_proven_optimal(clpmaster)
-        sol = clp_get_col_solution(clpmaster)
+        @assert is_proven_optimal(clpmaster)
+        sol = get_col_solution(clpmaster)
         minorstage1sol = sol[1:ncol1]
         #minorthetasol = sol[(ncol1+1):end]
-        modelobjective = clp_get_obj_value(clpmaster)
+        modelobjective = get_obj_value(clpmaster)
         minorobjective = dot(minorstage1sol,d.firstStageData.obj)
         
         nsolves += 1
@@ -133,7 +136,7 @@ function solveTRSerial(d::SMPSData, nscen::Integer)
         
     end
 
-    println("Optimal objective is: $(clp_get_obj_value(clpmaster)), $nmajoriter major iterations, master solved $nsolves times")
+    println("Optimal objective is: $(get_obj_value(clpmaster)), $nmajoriter major iterations, master solved $nsolves times")
     println("Time in master: $mastertime sec")
 
 end
