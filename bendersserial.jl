@@ -47,13 +47,13 @@ function addCut(master::ClpModel, optval::Float64, subgrad::Vector{Float64}, sta
     for k in 1:length(subgrad)
      #   print("$(subgrad[k]),")
         if abs(subgrad[k]) > 1e-10
-            push(cutvec,-subgrad[k])
-            push(cutcolidx,k-1)
+            push!(cutvec,-subgrad[k])
+            push!(cutcolidx,k-1)
         end
     end
     #println("]")
-    push(cutvec,1.)
-    push(cutcolidx,length(subgrad)+scen-1)
+    push!(cutvec,1.)
+    push!(cutcolidx,length(subgrad)+scen-1)
     cutnnz = length(cutvec)
     cutlb = optval-dot(subgrad,stage1sol)
 

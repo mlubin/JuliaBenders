@@ -11,6 +11,8 @@ function solveBendersParallel(nscen::Integer,asyncparam::Float64)
     stage1sol = solveExtensive(probdata,1)
     
     clpmaster = ClpModel()
+    options = ClpSolve()
+    set_presolve_type(options,1)
     np = nprocs()
 
     ncol1 = probdata.firstStageData.ncol
@@ -39,13 +41,13 @@ function solveBendersParallel(nscen::Integer,asyncparam::Float64)
     tasks = Array((Int,Int),0)
 
     function newcandidate(cand)
-        push(candidates,cand)
-        push(scenariosback,0)
-        push(triggerednext,false)
-        push(Tx,probdata.Tmat*cand)
-        push(candidateQ,dot(probdata.firstStageData.obj,cand))
+        push!(candidates,cand)
+        push!(scenariosback,0)
+        push!(triggerednext,false)
+        push!(Tx,probdata.Tmat*cand)
+        push!(candidateQ,dot(probdata.firstStageData.obj,cand))
         for i in 1:nscen
-            push(tasks,(length(candidates),i))
+            push!(tasks,(length(candidates),i))
         end
     end
     
@@ -64,7 +66,7 @@ function solveBendersParallel(nscen::Integer,asyncparam::Float64)
             @spawnlocal while !is_converged()
                 mytasks = tasks[1:min(blocksize,length(tasks))]
                 for i in 1:length(mytasks) # TODO: improve syntax
-                    shift(tasks)
+                    shift!(tasks)
                 end
                 if length(mytasks) == 0
                     yield()
@@ -89,7 +91,7 @@ function solveBendersParallel(nscen::Integer,asyncparam::Float64)
                         triggerednext[cand] = true
                         # resolve master
                         t = time()
-                        initial_solve(clpmaster)
+                        initial_solve(clpmaster,options)
                         increment_mastertime(time()-t)
                         @assert is_proven_optimal(clpmaster)
                         # check convergence

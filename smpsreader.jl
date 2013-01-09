@@ -48,10 +48,10 @@ function SMPSData(cor::String,tim::String,sto::String)
     colname = String[]
     rowname = String[]
     for i in 1:ncol
-        push(colname,column_name(reader,i))
+        push!(colname,column_name(reader,i))
     end
     for i in 1:nrow
-        push(rowname,row_name(reader,i))
+        push!(rowname,row_name(reader,i))
     end
 
 
@@ -109,14 +109,14 @@ function SMPSData(cor::String,tim::String,sto::String)
         rowidx = find(rowname[rowstart2:end] .== row)[1]
         @assert 0 <= rowidx <= nrow2
         if idxmap[rowidx] == -1 # haven't seen before
-            push(randomIdx,rowidx)
-            push(randomValues,[val])
-            push(randomProbabilities,[p])
+            push!(randomIdx,rowidx)
+            push!(randomValues,[val])
+            push!(randomProbabilities,[p])
             idxmap[rowidx] = size(randomIdx,1)
         else
             idx = idxmap[rowidx]
-            push(randomValues[idx],val)
-            push(randomProbabilities[idx],p)
+            push!(randomValues[idx],val)
+            push!(randomProbabilities[idx],p)
         end
         line = readline(fs)
     end
@@ -178,7 +178,7 @@ function monteCarloSample(d::SMPSData,scenariosWanted)
                 rowlb[idx] = val
             end
         end
-        push(out,(rowlb,rowub))
+        push!(out,(rowlb,rowub))
     end
 
     return out

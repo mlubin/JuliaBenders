@@ -62,16 +62,16 @@ function solveATR(nscen::Integer,asyncparam::Float64)
     basketsize() = sum(!(scenariosback .== nscen))
 
     function newcandidate(cand)
-        push(candidates,cand)
-        push(scenariosback,0)
-        push(triggerednext,false)
-        push(Tx,probdata.Tmat*cand)
-        push(candidateQ,dot(probdata.firstStageData.obj,cand))
-        push(parentincumbent,Qmin[2])
-        push(parentradius,get_tr())
-        push(modelobj,NaN)
+        push!(candidates,cand)
+        push!(scenariosback,0)
+        push!(triggerednext,false)
+        push!(Tx,probdata.Tmat*cand)
+        push!(candidateQ,dot(probdata.firstStageData.obj,cand))
+        push!(parentincumbent,Qmin[2])
+        push!(parentradius,get_tr())
+        push!(modelobj,NaN)
         for i in 1:nscen
-            push(tasks,(length(candidates),i))
+            push!(tasks,(length(candidates),i))
         end
     end
     
@@ -93,7 +93,7 @@ function solveATR(nscen::Integer,asyncparam::Float64)
             @spawnlocal while !is_converged()
                 mytasks = tasks[1:min(blocksize,length(tasks))]
                 for i in 1:length(mytasks) # TODO: improve syntax
-                    shift(tasks)
+                    shift!(tasks)
                 end
                 if length(mytasks) == 0
                     yield()

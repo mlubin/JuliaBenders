@@ -15,7 +15,7 @@ function asyncparalleltest()
     tasks = Array((SolType,Int),0)
     # initialize
     for i in 1:nscen
-        push(tasks,(d.sol,i))
+        push!(tasks,(d.sol,i))
     end
     
     finishedDict = Dict{Real,Int}()
@@ -31,9 +31,9 @@ function asyncparalleltest()
         @spawnlocal begin
             while d.status != "Done" #&& nstarted.x <= 5
                 # send out new task
-                t = shift(tasks)
+                t = shift!(tasks)
                 result = remote_call_fetch(p,subproblem,t)
-                push(d.cuts,result)
+                push!(d.cuts,result)
                 #println("Waiting for $p")
                 #println("Proc $p is done, returned $(d.cuts[end])")
                 nsolved = finishedDict[t[1]]
@@ -44,7 +44,7 @@ function asyncparalleltest()
                     println("Started round $(nstarted.x)")
                     
                     for i in 1:nscen
-                        push(tasks,(d.sol,i))
+                        push!(tasks,(d.sol,i))
                     end
                     finishedDict[d.sol] = 0
                     # invert sign to mark semi-complete
