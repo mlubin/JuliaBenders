@@ -30,7 +30,24 @@ type SMPSData
     randomIdx::Vector{Int} # indices (wrt 2nd stage) of 2nd stage variables that are random
     randomValues::Vector{Vector{Float64}} # discrete values each r.v. can take
     randomProbabilities::Vector{Vector{Float64}} # corresponding probabilities
+    initialSolution::Vector{Float64} # initial solution given in .sol file
 end
+
+function SMPSData(cor::String,tim::String,sto::String,sol::String)
+    s = SMPSData(cor,tim,sto)
+    
+    f = open(sol,"r")
+    head = readline(f)
+    nelts = int(head)
+    @assert nelts == s.firstStageData.ncol
+    s.initialSolution = Array(Float64,nelts)
+    for i in 1:nelts
+        l = readline(f)
+        s.initialSolution[i] = float(l)
+    end
+    return s
+end
+
 
 function SMPSData(cor::String,tim::String,sto::String) 
     
@@ -133,7 +150,7 @@ function SMPSData(cor::String,tim::String,sto::String)
     end
     println("$nscen total possible scenarios")
 
-    SMPSData(firstStageData,secondStageTemplate,Tmat,Wmat,Amat,randomIdx,randomValues,randomProbabilities)
+    SMPSData(firstStageData,secondStageTemplate,Tmat,Wmat,Amat,randomIdx,randomValues,randomProbabilities,Float64[])
 
 end
 

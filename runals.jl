@@ -4,12 +4,10 @@ load("bendersserial")
 
 
 # asyncparam -- wait for this proportion of scenarios back before we resolve
-function solveBendersParallel(nscen::Integer,asyncparam::Float64)
+function solveBendersParallel(nscen::Int, asyncparam::Float64, blocksize::Int)
 
     scenarioData = monteCarloSample(probdata,1:nscen)
 
-    stage1sol = solveExtensive(probdata,1)
-    
     clpmaster = ClpModel()
     options = ClpSolve()
     set_presolve_type(options,1)
@@ -52,7 +50,12 @@ function solveBendersParallel(nscen::Integer,asyncparam::Float64)
     end
     
     # initial guess
-    newcandidate(solveExtensive(probdata,1))
+    if length(probdata.initialSolution) != 0
+        println("Using provided starting solution")
+        newcandidate(probdata.initialSolution)
+    else
+        newcandidate(solveExtensive(probdata,1))
+    end
 
     converged = false
     set_converged() = (converged = true)
@@ -95,7 +98,7 @@ function solveBendersParallel(nscen::Integer,asyncparam::Float64)
                         increment_mastertime(time()-t)
                         @assert is_proven_optimal(clpmaster)
                         # check convergence
-                        if Qmin[1] - get_obj_value(clpmaster) < 1e-7(1+abs(Qmin[1]))
+                        if Qmin[1] - get_obj_value(clpmaster) < 1e-5(1+abs(Qmin[1]))
                             set_converged()
                             break
                         end
@@ -112,11 +115,16 @@ function solveBendersParallel(nscen::Integer,asyncparam::Float64)
 
 end
 
+if length(ARGS) != 4 
+    error("usage: runatr.jl [dataname] [num scenarios] [async param] [block size]")
+end
+
 s = ARGS[1]
 nscen = int(ARGS[2])
 asyncparam = float(ARGS[3])
-d = SMPSData(strcat(s,".cor"),strcat(s,".tim"),strcat(s,".sto"))
+blocksize = int(ARGS[4])
+d = SMPSData(strcat(s,".cor"),strcat(s,".tim"),strcat(s,".sto"),strcat(s,".sol"))
 for p in 1:nprocs()
     remote_call_fetch(p,setGlobalProbData,d)
 end
-@time solveBendersParallel(nscen,asyncparam)
+@time solveBendersParallel(nscen,asyncparam,blocksize)

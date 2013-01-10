@@ -4,15 +4,15 @@ load("trserial")
 
 
 # asyncparam -- wait for this proportion of scenarios back before we resolve
-function solveATR(nscen::Integer,asyncparam::Float64)
-    const blocksize = 2
-    const maxbasket = 10
+function solveATR(nscen::Int, asyncparam::Float64, blocksize::Int, maxbasket::Int)
     const tr_max = 1000.
     const xi = 1e-4 # parameter related to accepting new iterate
 
     scenarioData = monteCarloSample(probdata,1:nscen)
 
     clpmaster = ClpModel()
+    options = ClpSolve()
+    set_presolve_type(options,1)
     set_log_level(clpmaster,0)
     np = nprocs()
 
@@ -76,7 +76,12 @@ function solveATR(nscen::Integer,asyncparam::Float64)
     end
     
     # initial guess
-    newcandidate(solveExtensive(probdata,1))
+    if length(probdata.initialSolution) != 0
+        println("Using provided starting solution")
+        newcandidate(probdata.initialSolution)
+    else
+        newcandidate(solveExtensive(probdata,1))
+    end
 
     tr_radius = max(1,0.2*norm(candidates[1],Inf))
 
@@ -157,11 +162,11 @@ function solveATR(nscen::Integer,asyncparam::Float64)
                         # resolve master
                         setTR(clpmaster,candidates[cand],d.firstStageData.collb,d.firstStageData.colub,get_tr())
                         t = time()
-                        initial_solve(clpmaster)
+                        initial_solve(clpmaster,options)
                         increment_mastertime(time()-t)
                         @assert is_proven_optimal(clpmaster)
                         # check convergence
-                        if Qmin[1] - get_obj_value(clpmaster) < 1e-7(1+abs(Qmin[1]))
+                        if Qmin[1] - get_obj_value(clpmaster) < 1e-5(1+abs(Qmin[1]))
                             set_converged()
                             break
                         end
@@ -179,11 +184,17 @@ function solveATR(nscen::Integer,asyncparam::Float64)
 
 end
 
+if length(ARGS) != 5 
+    error("usage: runatr.jl [dataname] [num scenarios] [async param] [block size] [max basket]")
+end
+
 s = ARGS[1]
 nscen = int(ARGS[2])
 asyncparam = float(ARGS[3])
-d = SMPSData(strcat(s,".cor"),strcat(s,".tim"),strcat(s,".sto"))
+blocksize = int(ARGS[4])
+maxbasket = int(ARGS[5])
+d = SMPSData(strcat(s,".cor"),strcat(s,".tim"),strcat(s,".sto"),strcat(s,".sol"))
 for p in 1:nprocs()
     remote_call_fetch(p,setGlobalProbData,d)
 end
-@time solveATR(nscen,asyncparam)
+@time solveATR(nscen,asyncparam,blocksize,maxbasket)
