@@ -1,4 +1,4 @@
-load("bendersserial")
+require("bendersserial")
 
 # asynchronous l-shaped method (ALS) of Linderoth and Wright
 
@@ -66,7 +66,7 @@ function solveBendersParallel(nscen::Int, asyncparam::Float64, blocksize::Int)
     const blocksize = 2
     @sync for p in 1:np
         if p != myid() || np == 1
-            @spawnlocal while !is_converged()
+            @async while !is_converged()
                 mytasks = tasks[1:min(blocksize,length(tasks))]
                 for i in 1:length(mytasks) # TODO: improve syntax
                     shift!(tasks)
@@ -123,7 +123,7 @@ s = ARGS[1]
 nscen = int(ARGS[2])
 asyncparam = float(ARGS[3])
 blocksize = int(ARGS[4])
-d = SMPSData(strcat(s,".cor"),strcat(s,".tim"),strcat(s,".sto"),strcat(s,".sol"))
+d = SMPSData(string(s,".cor"),string(s,".tim"),string(s,".sto"),string(s,".sol"))
 for p in 1:nprocs()
     remote_call_fetch(p,setGlobalProbData,d)
 end

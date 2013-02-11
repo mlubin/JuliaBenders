@@ -1,4 +1,4 @@
-load("bendersserial")
+require("bendersserial")
 
 # simple synchronous parallel benders
 
@@ -47,7 +47,7 @@ function solveBendersParallel(nscen::Integer)
         new_violated() = (nviolated += 1)
         @sync for p in 1:np
             if p != myid() || np == 1
-                @spawnlocal while true
+                @async while true
                     scenblock = next_block()
                     if length(scenblock) == 0
                         break
@@ -89,7 +89,7 @@ end
 
 s = ARGS[1]
 nscen = int(ARGS[2])
-d = SMPSData(strcat(s,".cor"),strcat(s,".tim"),strcat(s,".sto"))
+d = SMPSData(string(s,".cor"),string(s,".tim"),string(s,".sto"))
 for p in 1:nprocs()
     remote_call_fetch(p,setGlobalProbData,d)
 end

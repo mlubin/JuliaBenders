@@ -1,4 +1,4 @@
-load("trserial")
+require("trserial")
 
 # asynchronous trust region (ATR) method of Linderoth and Wright
 
@@ -95,7 +95,7 @@ function solveATR(nscen::Int, asyncparam::Float64, blocksize::Int, maxbasket::In
     increment_mastertime(t) = (mastertime += t)
     @sync for p in 1:np
         if p != myid() || np == 1
-            @spawnlocal while !is_converged()
+            @async while !is_converged()
                 mytasks = tasks[1:min(blocksize,length(tasks))]
                 for i in 1:length(mytasks) # TODO: improve syntax
                     shift!(tasks)
@@ -122,6 +122,7 @@ function solveATR(nscen::Int, asyncparam::Float64, blocksize::Int, maxbasket::In
                                 Qmin[1] = candidateQ[cand]
                                 Qmin[2] = cand
                             end
+                            println("Finished candidate $cand (val $(candidateQ[cand]), incumbent $(Qmin[1]), parent 1")
                         else
                             @assert scenariosback[parentidx] == nscen
                             parentQ = candidateQ[parentidx]
@@ -193,7 +194,7 @@ nscen = int(ARGS[2])
 asyncparam = float(ARGS[3])
 blocksize = int(ARGS[4])
 maxbasket = int(ARGS[5])
-d = SMPSData(strcat(s,".cor"),strcat(s,".tim"),strcat(s,".sto"),strcat(s,".sol"))
+d = SMPSData(string(s,".cor"),string(s,".tim"),string(s,".sto"),string(s,".sol"))
 for p in 1:nprocs()
     remote_call_fetch(p,setGlobalProbData,d)
 end
