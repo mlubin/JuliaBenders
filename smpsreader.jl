@@ -116,7 +116,7 @@ function SMPSData(cor::String,tim::String,sto::String)
 
 
     line = readline(fs)
-    while search(line,"ENDATA") == (0,0)
+    while search(line,"ENDATA") == 0:-1
         sp = split(line)
         col,row = sp[1],sp[2]
         val,p = float(sp[3]),float(sp[end])
