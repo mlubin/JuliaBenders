@@ -71,6 +71,7 @@ function solveBendersParallel(nscen::Int, asyncparam::Float64, blocksize::Int)
     niter = 0
     mastertime = 0.
     increment_mastertime(t) = (mastertime += t)
+    tstart = time()
     @sync for p in 1:np
         if (p != myid() && p != lpmasterproc) || np == 1
             @async while !is_converged()
@@ -102,7 +103,7 @@ function solveBendersParallel(nscen::Int, asyncparam::Float64, blocksize::Int)
                             x = time()
                             initial_solve(clpmaster,options)
                             mtime = time()-x
-                            @printf("%.2f sec in master",mtime)
+                            @printf("%.2f sec in master\n",mtime)
                             @assert is_proven_optimal(clpmaster)
                             mtime,get_obj_value(clpmaster), get_col_solution(clpmaster)[1:ncol1]
                         end
@@ -123,6 +124,7 @@ function solveBendersParallel(nscen::Int, asyncparam::Float64, blocksize::Int)
     @assert converged
     println("Optimal objective is: $(Qmin[1]), $(length(candidates)) candidates ($(sum(scenariosback .== nscen)) complete), $(sum(scenariosback)) scenario subproblems solved")
     println("Time in master: $mastertime sec")
+    println("Total time (w/o startup): $(time()-tstart)")
 
 end
 
