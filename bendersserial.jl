@@ -13,13 +13,16 @@ end
 
 function solveSubproblem(rowlb, rowub)
 
+    options = ClpSolve()
+    set_presolve_type(options,1)
+
     Tmat = probdata.Tmat
     ncol1 = probdata.firstStageData.ncol
     nrow2 = probdata.secondStageTemplate.nrow
 
     chg_row_lower(clpsubproblem,rowlb)
     chg_row_upper(clpsubproblem,rowub)
-    initial_solve(clpsubproblem)
+    initial_solve(clpsubproblem,options)
     # don't handle infeasible subproblems yet
     @assert is_proven_optimal(clpsubproblem)
     optval = get_obj_value(clpsubproblem)

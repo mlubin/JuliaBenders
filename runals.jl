@@ -7,23 +7,31 @@ require("bendersserial")
 function solveBendersParallel(nscen::Int, asyncparam::Float64, blocksize::Int)
 
     scenarioData = monteCarloSample(probdata,1:nscen)
-
-    clpmaster = ClpModel()
-    options = ClpSolve()
-    set_presolve_type(options,1)
     np = nprocs()
+    lpmasterproc = (np > 1) ? 2 : 1
 
-    ncol1 = probdata.firstStageData.ncol
-    nrow1 = probdata.firstStageData.nrow
-    nrow2 = probdata.secondStageTemplate.nrow
-    # add \theta variables for cuts
-    thetaidx = [(ncol1+1):(ncol1+nscen)]
-    load_problem(clpmaster, probdata.Amat, probdata.firstStageData.collb,
-        probdata.firstStageData.colub, probdata.firstStageData.obj, 
-        probdata.firstStageData.rowlb, probdata.firstStageData.rowub)
-    zeromat = SparseMatrixCSC(int32(nrow1),int32(nscen),ones(Int32,nscen+1),Int32[],Float64[])
-    add_columns(clpmaster, -1e8*ones(nscen), Inf*ones(nscen),
-        (1/nscen)*ones(nscen), zeromat)
+    @everywhere begin
+        ncol1 = probdata.firstStageData.ncol
+        nrow1 = probdata.firstStageData.nrow
+        nrow2 = probdata.secondStageTemplate.nrow
+    end
+
+    @spawnat lpmasterproc begin
+        global clpmaster, options, probdata
+        clpmaster = ClpModel()
+        options = ClpSolve()
+        set_presolve_type(options,1)
+
+        # add \theta variables for cuts
+        thetaidx = [(ncol1+1):(ncol1+nscen)]
+        load_problem(clpmaster, probdata.Amat, probdata.firstStageData.collb,
+            probdata.firstStageData.colub, probdata.firstStageData.obj, 
+            probdata.firstStageData.rowlb, probdata.firstStageData.rowub)
+        zeromat = SparseMatrixCSC(int32(nrow1),int32(nscen),ones(Int32,nscen+1),Int32[],Float64[])
+        add_columns(clpmaster, -1e8*ones(nscen), Inf*ones(nscen),
+            (1/nscen)*ones(nscen), zeromat)
+    end
+
 
     @everywhere load_problem(clpsubproblem, probdata.Wmat, probdata.secondStageTemplate.collb,
         probdata.secondStageTemplate.colub, probdata.secondStageTemplate.obj,
@@ -63,14 +71,10 @@ function solveBendersParallel(nscen::Int, asyncparam::Float64, blocksize::Int)
     niter = 0
     mastertime = 0.
     increment_mastertime(t) = (mastertime += t)
-    const blocksize = 2
     @sync for p in 1:np
-        if p != myid() || np == 1
+        if (p != myid() && p != lpmasterproc) || np == 1
             @async while !is_converged()
-                mytasks = tasks[1:min(blocksize,length(tasks))]
-                for i in 1:length(mytasks) # TODO: improve syntax
-                    shift!(tasks)
-                end
+                mytasks = delete!(tasks,1:min(blocksize,length(tasks)))
                 if length(mytasks) == 0
                     yield()
                     continue
@@ -83,7 +87,8 @@ function solveBendersParallel(nscen::Int, asyncparam::Float64, blocksize::Int)
                     optval, subgrad = results[i]
                     scenariosback[cand] += 1
                     candidateQ[cand] += optval/nscen
-                    addCut(clpmaster,optval,subgrad,candidates[cand],s)
+                    f = @spawnat lpmasterproc (global clpmaster; addCut(clpmaster,optval,subgrad,candidates[cand],s))
+                    #wait(f) # we don't need to wait
                     if scenariosback[cand] == nscen
                         if candidateQ[cand] < Qmin[1]
                             Qmin[1] = candidateQ[cand]
@@ -92,17 +97,23 @@ function solveBendersParallel(nscen::Int, asyncparam::Float64, blocksize::Int)
                     end
                     if scenariosback[cand] >= asyncparam*nscen && !triggerednext[cand]
                         triggerednext[cand] = true
-                        # resolve master
-                        t = time()
-                        initial_solve(clpmaster,options)
-                        increment_mastertime(time()-t)
-                        @assert is_proven_optimal(clpmaster)
+                        f = @spawnat lpmasterproc begin # resolve master
+                            global clpmaster, options
+                            x = time()
+                            initial_solve(clpmaster,options)
+                            mtime = time()-x
+                            @printf("%.2f sec in master",mtime)
+                            @assert is_proven_optimal(clpmaster)
+                            mtime,get_obj_value(clpmaster), get_col_solution(clpmaster)[1:ncol1]
+                        end
+                        t, objval, colsol = fetch(f)
+                        increment_mastertime(t)
                         # check convergence
-                        if Qmin[1] - get_obj_value(clpmaster) < 1e-5(1+abs(Qmin[1]))
+                        if Qmin[1] - objval < 1e-5(1+abs(Qmin[1]))
                             set_converged()
                             break
                         end
-                        newcandidate(get_col_solution(clpmaster)[1:ncol1])
+                        newcandidate(colsol)
                     end
                 end
             end

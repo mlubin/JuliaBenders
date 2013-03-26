@@ -96,10 +96,7 @@ function solveATR(nscen::Int, asyncparam::Float64, blocksize::Int, maxbasket::In
     @sync for p in 1:np
         if p != myid() || np == 1
             @async while !is_converged()
-                mytasks = tasks[1:min(blocksize,length(tasks))]
-                for i in 1:length(mytasks) # TODO: improve syntax
-                    shift!(tasks)
-                end
+                mytasks = delete!(tasks,1:min(blocksize,length(tasks)))
                 if length(mytasks) == 0
                     yield()
                     continue
