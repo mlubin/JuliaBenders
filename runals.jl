@@ -83,13 +83,20 @@ function solveBendersParallel(nscen::Int, asyncparam::Float64, blocksize::Int)
                 results = remote_call_fetch(p,solveSubproblems,
                     [scenarioData[s][1]-Tx[cand] for (cand,s) in mytasks],
                     [scenarioData[s][2]-Tx[cand] for (cand,s) in mytasks])
+                # add all cuts first
+                @spawnat lpmasterproc begin
+                    global clpmaster
+                    for k in 1:length(mytasks)
+                        cand,s = mytasks[k]
+                        optval, subgrad = results[k]
+                        addCut(clpmaster,optval,subgrad,candidates[cand],s)
+                    end
+                end
                 for i in 1:length(mytasks)
                     cand,s = mytasks[i]
                     optval, subgrad = results[i]
                     scenariosback[cand] += 1
                     candidateQ[cand] += optval/nscen
-                    f = @spawnat lpmasterproc (global clpmaster; addCut(clpmaster,optval,subgrad,candidates[cand],s))
-                    #wait(f) # we don't need to wait
                     if scenariosback[cand] == nscen
                         if candidateQ[cand] < Qmin[1]
                             Qmin[1] = candidateQ[cand]
