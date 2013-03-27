@@ -2,6 +2,7 @@ require("bendersserial")
 
 # asynchronous l-shaped method (ALS) of Linderoth and Wright
 
+const aggregatecuts = true
 
 # asyncparam -- wait for this proportion of scenarios back before we resolve
 function solveBendersParallel(nscen::Int, asyncparam::Float64, blocksize::Int)
@@ -84,12 +85,19 @@ function solveBendersParallel(nscen::Int, asyncparam::Float64, blocksize::Int)
                     [scenarioData[s][1]-Tx[cand] for (cand,s) in mytasks],
                     [scenarioData[s][2]-Tx[cand] for (cand,s) in mytasks])
                 # add all cuts first
-                @spawnat lpmasterproc begin
-                    global clpmaster
-                    for k in 1:length(mytasks)
-                        cand,s = mytasks[k]
-                        optval, subgrad = results[k]
-                        addCut(clpmaster,optval,subgrad,candidates[cand],s)
+                if !aggregatecuts
+                    @spawnat lpmasterproc begin
+                        global clpmaster
+                        for k in 1:length(mytasks)
+                            cand,s = mytasks[k]
+                            optval, subgrad = results[k]
+                            addCut(clpmaster,optval,subgrad,candidates[cand],s)
+                        end
+                    end
+                else
+                    @spawnat lpmasterproc begin
+                        global clpmaster
+                        addCuts(clpmaster, mytasks, results, candidates, ncol1, nscen)
                     end
                 end
                 for i in 1:length(mytasks)

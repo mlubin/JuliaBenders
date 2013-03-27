@@ -65,6 +65,36 @@ function addCut(master::ClpModel, optval::Float64, subgrad::Vector{Float64}, sta
 
 end
 
+function addCuts(master::ClpModel, tasks, results, candidates::Vector{Vector{Float64}}, nvar1, nscen)
+    @assert number_cols(master) == nvar1 + nscen
+    @assert length(tasks) == length(results)
+    row = zeros(nvar1+nscen)
+    cutlb = 0.0
+    for k in 1:length(tasks)
+        cand,s = tasks[k]
+        optval, subgrad = results[k]
+        row[1:nvar1] -= subgrad
+        cutlb += optval 
+        cutlb -= dot(subgrad,candidates[cand])
+        row[nvar1 + s] += 1
+    end
+
+    # add (0-based) cut to master
+    cutvec = Float64[]
+    cutcolidx = Int32[]
+    for k in 1:length(row)
+        if abs(row[k]) > 1e-10
+            push!(cutvec,row[k])
+            push!(cutcolidx,k-1)
+        end
+    end
+    cutnnz = length(cutvec)
+
+    add_rows(master, 1, [cutlb], [1e25], Int32[0,cutnnz], cutcolidx, cutvec)
+
+
+end
+
 
 function solveBendersSerial(d::SMPSData, nscen::Integer)
 
