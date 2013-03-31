@@ -2,6 +2,9 @@ require("bendersserial")
 
 # asynchronous l-shaped method (ALS) of Linderoth and Wright
 
+# this will aggregate cuts according to the block size
+# enabling results in much faster master but increases
+# the number of total iterations
 const aggregatecuts = true
 
 # asyncparam -- wait for this proportion of scenarios back before we resolve
