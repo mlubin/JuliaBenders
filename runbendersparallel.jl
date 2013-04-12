@@ -52,7 +52,7 @@ function solveBendersParallel(nscen::Integer)
                     if length(scenblock) == 0
                         break
                     end
-                    results = remote_call_fetch(p,solveSubproblems,
+                    results = remotecall_fetch(p,solveSubproblems,
                         [scenarioData[s][1]-Tx for s in scenblock],
                         [scenarioData[s][2]-Tx for s in scenblock])
                     for (s,result) in zip(scenblock,results)
@@ -91,6 +91,6 @@ s = ARGS[1]
 nscen = int(ARGS[2])
 d = SMPSData(string(s,".cor"),string(s,".tim"),string(s,".sto"))
 for p in 1:nprocs()
-    remote_call_fetch(p,setGlobalProbData,d)
+    remotecall_fetch(p,setGlobalProbData,d)
 end
 @time solveBendersParallel(nscen)

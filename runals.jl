@@ -14,11 +14,9 @@ function solveBendersParallel(nscen::Int, asyncparam::Float64, blocksize::Int)
     np = nprocs()
     lpmasterproc = (np > 1) ? 2 : 1
 
-    @everywhere begin
-        ncol1 = probdata.firstStageData.ncol
-        nrow1 = probdata.firstStageData.nrow
-        nrow2 = probdata.secondStageTemplate.nrow
-    end
+    ncol1 = probdata.firstStageData.ncol
+    nrow1 = probdata.firstStageData.nrow
+    nrow2 = probdata.secondStageTemplate.nrow
 
     @spawnat lpmasterproc begin
         global clpmaster, options, probdata
@@ -84,7 +82,7 @@ function solveBendersParallel(nscen::Int, asyncparam::Float64, blocksize::Int)
                     yield()
                     continue
                 end
-                results = remote_call_fetch(p,solveSubproblems,
+                results = remotecall_fetch(p,solveSubproblems,
                     [scenarioData[s][1]-Tx[cand] for (cand,s) in mytasks],
                     [scenarioData[s][2]-Tx[cand] for (cand,s) in mytasks])
                 # add all cuts first
@@ -156,6 +154,6 @@ asyncparam = float(ARGS[3])
 blocksize = int(ARGS[4])
 d = SMPSData(string(s,".cor"),string(s,".tim"),string(s,".sto"),string(s,".sol"))
 for p in 1:nprocs()
-    remote_call_fetch(p,setGlobalProbData,d)
+    remotecall_fetch(p,setGlobalProbData,d)
 end
 @time solveBendersParallel(nscen,asyncparam,blocksize)

@@ -2,31 +2,40 @@ require("trserial")
 
 # asynchronous trust region (ATR) method of Linderoth and Wright
 
+# this will aggregate cuts according to the block size
+# enabling results in much faster master but increases
+# the number of total iterations
+const aggregatecuts = true
 
 # asyncparam -- wait for this proportion of scenarios back before we resolve
 function solveATR(nscen::Int, asyncparam::Float64, blocksize::Int, maxbasket::Int)
     const tr_max = 1000.
     const xi = 1e-4 # parameter related to accepting new iterate
 
-    scenarioData = monteCarloSample(probdata,1:nscen)
-
-    clpmaster = ClpModel()
-    options = ClpSolve()
-    set_presolve_type(options,1)
-    set_log_level(clpmaster,0)
     np = nprocs()
+    lpmasterproc = (np > 1) ? 2 : 1
+    
+    scenarioData = monteCarloSample(probdata,1:nscen)
 
     ncol1 = probdata.firstStageData.ncol
     nrow1 = probdata.firstStageData.nrow
     nrow2 = probdata.secondStageTemplate.nrow
-    # add \theta variables for cuts
-    thetaidx = [(ncol1+1):(ncol1+nscen)]
-    load_problem(clpmaster, probdata.Amat, probdata.firstStageData.collb,
-        probdata.firstStageData.colub, probdata.firstStageData.obj, 
-        probdata.firstStageData.rowlb, probdata.firstStageData.rowub)
-    zeromat = SparseMatrixCSC(int32(nrow1),int32(nscen),ones(Int32,nscen+1),Int32[],Float64[])
-    add_columns(clpmaster, -1e8*ones(nscen), Inf*ones(nscen),
-        (1/nscen)*ones(nscen), zeromat)
+
+    @spawnat lpmasterproc begin
+        global clpmaster, options, probdata
+        clpmaster = ClpModel()
+        options = ClpSolve()
+        set_presolve_type(options,1)
+
+        # add \theta variables for cuts
+        thetaidx = [(ncol1+1):(ncol1+nscen)]
+        load_problem(clpmaster, probdata.Amat, probdata.firstStageData.collb,
+            probdata.firstStageData.colub, probdata.firstStageData.obj, 
+            probdata.firstStageData.rowlb, probdata.firstStageData.rowub)
+        zeromat = SparseMatrixCSC(int32(nrow1),int32(nscen),ones(Int32,nscen+1),Int32[],Float64[])
+        add_columns(clpmaster, -1e8*ones(nscen), Inf*ones(nscen),
+            (1/nscen)*ones(nscen), zeromat)
+    end
 
     @everywhere load_problem(clpsubproblem, probdata.Wmat, probdata.secondStageTemplate.collb,
         probdata.secondStageTemplate.colub, probdata.secondStageTemplate.obj,
@@ -94,23 +103,39 @@ function solveATR(nscen::Int, asyncparam::Float64, blocksize::Int, maxbasket::In
     mastertime = 0.
     increment_mastertime(t) = (mastertime += t)
     @sync for p in 1:np
-        if p != myid() || np == 1
+        if (p != myid() && p != lpmasterproc) || np == 1
             @async while !is_converged()
                 mytasks = delete!(tasks,1:min(blocksize,length(tasks)))
                 if length(mytasks) == 0
                     yield()
                     continue
                 end
-                results = remote_call_fetch(p,solveSubproblems,
+                results = remotecall_fetch(p,solveSubproblems,
                     [scenarioData[s][1]-Tx[cand] for (cand,s) in mytasks],
                     [scenarioData[s][2]-Tx[cand] for (cand,s) in mytasks])
+                # add all cuts first
+                if !aggregatecuts
+                    @spawnat lpmasterproc begin
+                        global clpmaster
+                        for k in 1:length(mytasks)
+                            cand,s = mytasks[k]
+                            optval, subgrad = results[k]
+                            addCut(clpmaster,optval,subgrad,candidates[cand],s)
+                        end
+                    end
+                else
+                    @spawnat lpmasterproc begin
+                        global clpmaster
+                        addCuts(clpmaster, mytasks, results, candidates, ncol1, nscen)
+                    end
+                end
+
                 for i in 1:length(mytasks)
                     cand,s = mytasks[i]
                     optval, subgrad = results[i]
                     parentidx = parentincumbent[cand]
                     scenariosback[cand] += 1
                     candidateQ[cand] += optval/nscen
-                    addCut(clpmaster,optval,subgrad,candidates[cand],s)
                     gennew = false
                     if scenariosback[cand] == nscen
                         gennew = true
@@ -158,18 +183,25 @@ function solveATR(nscen::Int, asyncparam::Float64, blocksize::Int, maxbasket::In
                     end
                     if gennew
                         # resolve master
-                        setTR(clpmaster,candidates[cand],d.firstStageData.collb,d.firstStageData.colub,get_tr())
-                        t = time()
-                        initial_solve(clpmaster,options)
-                        increment_mastertime(time()-t)
-                        @assert is_proven_optimal(clpmaster)
+                        f = @spawnat lpmasterproc begin # resolve master
+                            global clpmaster, options, probdata
+                            setTR(clpmaster,candidates[cand],probdata.firstStageData.collb,probdata.firstStageData.colub,get_tr())
+                            x = time()
+                            initial_solve(clpmaster,options)
+                            mtime = time()-x
+                            @printf("%.2f sec in master\n",mtime)
+                            @assert is_proven_optimal(clpmaster)
+                            mtime,get_obj_value(clpmaster), get_col_solution(clpmaster)[1:ncol1]
+                        end
+                        t, objval, colsol = fetch(f)
+                        increment_mastertime(t)
                         # check convergence
-                        if Qmin[1] - get_obj_value(clpmaster) < 1e-5(1+abs(Qmin[1]))
+                        if Qmin[1] - objval < 1e-5(1+abs(Qmin[1]))
                             set_converged()
                             break
                         end
-                        newcandidate(get_col_solution(clpmaster)[1:ncol1])
-                        modelobj[end] = get_obj_value(clpmaster) 
+                        newcandidate(colsol)
+                        modelobj[end] = objval 
                     end
                 end
             end
@@ -193,6 +225,6 @@ blocksize = int(ARGS[4])
 maxbasket = int(ARGS[5])
 d = SMPSData(string(s,".cor"),string(s,".tim"),string(s,".sto"),string(s,".sol"))
 for p in 1:nprocs()
-    remote_call_fetch(p,setGlobalProbData,d)
+    remotecall_fetch(p,setGlobalProbData,d)
 end
 @time solveATR(nscen,asyncparam,blocksize,maxbasket)
